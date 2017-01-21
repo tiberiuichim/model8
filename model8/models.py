@@ -77,7 +77,7 @@ class MLModel(Base):
             label = fragment.label
             sentences = pst.sentences_from_text(fragment.text)
             for sentence in sentences:
-                yield sentence, label
+                yield sentence.encode('utf-8'), label
 
     # @lru_cache(2)
     def build_tokenizer(self, max_nb_words=MAX_NB_WORDS):
@@ -184,15 +184,19 @@ class MLModel(Base):
     def datadir(self):
         return os.path.join(DATA_DIR, self.name)
 
+    @property
     def _tokenizer_path(self):
         return os.path.join(self.datadir, TOKENIZER_FILENAME)
 
+    @property
     def _model_path(self):
         return os.path.join(self.datadir, MODEL_FILENAME)
 
+    @property
     def _metadata_path(self):
         return os.path.join(self.datadir, METADATA_FILENAME)
 
+    @property
     def _stats_path(self):
         return os.path.join(self.datadir, STATS_FILENAME)
 
@@ -204,7 +208,7 @@ class MLModel(Base):
     def can_predict(self):
         """ Make a guess if the model is ready to make predictions
         """
-        if self._is_locked(self):
+        if self._is_locked():
             return False
 
         for fn in [self._tokenizer_path,
@@ -219,7 +223,7 @@ class MLModel(Base):
     def reset(self):
         """ Removes all model associated files. All for a fresh start.
         """
-        if self._is_locked(self):
+        if self._is_locked():
             return ValueError("Cannot reset while locked")
 
         for fn in [self._tokenizer_path,

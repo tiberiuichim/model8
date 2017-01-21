@@ -22,6 +22,7 @@ def make_tokenizer(texts, max_nb_words=-1):
     else:
         tokenizer = Tokenizer(nb_words=max_nb_words)
 
+    import pdb; pdb.set_trace()
     tokenizer.fit_on_texts(texts)
 
     return tokenizer
