@@ -74,8 +74,15 @@ prophet = Service(name="prophetservice",
 
 @prophet.post()
 def model_predict(request):
-    # make predictions on each line
-    return {}
+    # make predictions on one sentence
+    sess = request.dbsession
+    name = request.matchdict['name']
+    text = request.json['text'].encode('utf-8')
+    model = sess.query(MLModel).filter_by(name=name).one()
+    if not model.can_predict():
+        raise ValueError("Model is not able to predict")
+    res = model.predict(text)
+    return {'score': str(res[0, 0])}
 
 
 @prophet.get()

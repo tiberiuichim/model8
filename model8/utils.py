@@ -1,10 +1,13 @@
 """ Generic utils
 """
 
-import fcntl
 from contextlib import contextmanager
+import fcntl
+import logging
 import os.path
 import time
+
+logger = logging.getLogger('model8')
 
 
 @contextmanager
@@ -20,9 +23,11 @@ def folder_lock(path):
     lpath = os.path.join(path, '.lock')
     if os.path.exists(lpath):   # TODO: use real locking
         raise ValueError("Path is already locked")
+    logger.debug('Locking')
     lockfile = open(lpath, 'w+')
     fcntl.flock(lockfile, fcntl.LOCK_EX | fcntl.LOCK_NB)
     yield
-    time.sleep(500)
+    time.sleep(0.5)
     fcntl.flock(lockfile, fcntl.LOCK_UN)
     os.remove(lpath)
+    logger.debug('Unlocked')

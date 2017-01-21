@@ -22,7 +22,6 @@ def make_tokenizer(texts, max_nb_words=-1):
     else:
         tokenizer = Tokenizer(nb_words=max_nb_words)
 
-    import pdb; pdb.set_trace()
     tokenizer.fit_on_texts(texts)
 
     return tokenizer
@@ -53,8 +52,7 @@ def split_data(tokenizer, sentences, labels, max_seq_len=-1, vsplit=0.2):
     return (X_train, y_train, X_test, y_test, tokenizer)
 
 
-def make_model(train_val, train_labels, test_val, test_labels, tokenizer,
-               max_nb_words):
+def make_model(train_val, train_labels, test_val, test_labels, max_nb_words):
 
     print("Train shape", train_val.shape)
     print("Test shape", test_val.shape)

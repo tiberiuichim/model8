@@ -15,10 +15,13 @@ from sqlalchemy.orm import configure_mappers
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.schema import MetaData
+import logging
 import json
 import numpy as np
 import os.path
 import zope.sqlalchemy
+
+logger = logging.getLogger('model8')
 
 
 # Recommended naming convention used by Alembic, as various different database
@@ -107,10 +110,10 @@ class MLModel(Base):
         }
 
         with folder_lock(self.datadir):
-            with open(self._tokenizer_path) as f:
+            with open(self._tokenizer_path, 'w') as f:
                 cPickle.dump(tokenizer, f)
 
-            with open(self._stats_path) as f:
+            with open(self._stats_path, 'w') as f:
                 json.dump(statistics, f)
 
         # now split the texts into training and test data
@@ -127,16 +130,20 @@ class MLModel(Base):
             'labels': label_index,
         }
         with folder_lock(self.datadir):
-            with open(self._metadata_path) as f:
+            with open(self._metadata_path, 'w') as f:
                 cPickle.dump(metadata, f)
+
+        return tokenizer, X_train, y_train, X_test, y_test, labels
 
     # @lru_cache(2)
     def build(self):
         if self._is_locked():
             raise ValueError("Data is locked")
 
-        tokenizer = self.build_tokenizer(max_nb_words=MAX_NB_WORDS)
-        model = make_model(tokenizer, max_nb_words=MAX_NB_WORDS)
+        tokenizer, X_train, y_train, X_test, y_test, labels = \
+            self.build_tokenizer(max_nb_words=MAX_NB_WORDS)
+        model = make_model(X_train, y_train, X_test, y_test,
+                           max_nb_words=MAX_NB_WORDS)
         with folder_lock(self.datadir):
             model.save(self._model_path)
         return model
@@ -146,7 +153,11 @@ class MLModel(Base):
         # tokenizer, the model we split
         tokens = self.tokenizer.texts_to_sequences([sentence])
         sequence = np.array(tokens)
-        return self.model.predict(sequence)
+        if len(sequence[0, ]) == 0:
+            logger.info("Cannot predict, no tokens recognized")
+            return {}
+        model = self.get_keras_model()
+        return model.predict(sequence)
 
     def statistics(self):
         sp = self._stats_path
@@ -159,6 +170,7 @@ class MLModel(Base):
         return stats
 
     # @lru_cache(2)
+    @property
     def tokenizer(self):
         """ Returns the tokenizer object
         """
@@ -172,7 +184,7 @@ class MLModel(Base):
         return tokenizer
 
     @lru_cache(10)
-    def model(self):
+    def get_keras_model(self):
         """ Returns the model object
         """
         mp = self._model_path
