@@ -80,7 +80,8 @@ class MLModel(Base):
             label = fragment.label
             sentences = pst.sentences_from_text(fragment.text)
             for sentence in sentences:
-                yield sentence.encode('utf-8'), label
+                # yield sentence.encode('utf-8'), label
+                yield sentence, label   # py3
 
     # @lru_cache(2)
     def build_tokenizer(self, max_nb_words=MAX_NB_WORDS):
@@ -110,7 +111,7 @@ class MLModel(Base):
         }
 
         with folder_lock(self.datadir):
-            with open(self._tokenizer_path, 'w') as f:
+            with open(self._tokenizer_path, 'wb') as f:
                 cPickle.dump(tokenizer, f)
 
             with open(self._stats_path, 'w') as f:
@@ -130,7 +131,7 @@ class MLModel(Base):
             'labels': label_index,
         }
         with folder_lock(self.datadir):
-            with open(self._metadata_path, 'w') as f:
+            with open(self._metadata_path, 'wb') as f:
                 cPickle.dump(metadata, f)
 
         return tokenizer, X_train, y_train, X_test, y_test, labels
