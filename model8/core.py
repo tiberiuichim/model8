@@ -30,6 +30,10 @@ def make_tokenizer(texts, max_nb_words=-1):
 def split_data(tokenizer, sentences, labels, max_seq_len=-1, vsplit=0.2):
     """ Transforms the list of sentences to training and testing sequences
     """
+    nb_validation_samples = int(vsplit * len(sentences))
+    print(nb_validation_samples)
+    if nb_validation_samples < 4:
+        raise ValueError("Insufficient data, please add more input data")
 
     sequences = tokenizer.texts_to_sequences(sentences)
     # TODO: autocalculate maxlen
@@ -41,7 +45,6 @@ def split_data(tokenizer, sentences, labels, max_seq_len=-1, vsplit=0.2):
     np.random.shuffle(indices)
     data = data[indices]
     labels = labels[indices]    # cool way to shufle two arrays in same order
-    nb_validation_samples = int(vsplit * data.shape[0])
 
     X_train = data[:-nb_validation_samples]
     y_train = labels[:-nb_validation_samples]

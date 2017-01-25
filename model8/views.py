@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from cornice import Service
 from cornice.resource import resource
 from pyramid.view import notfound_view_config
@@ -11,25 +12,39 @@ def notfound_view(request):
 
 
 def get_model_labels(model, session):
-    res = session.query(DataFragment.label).select_from(MLModel).\
-        join(MLModel.fragments).filter(MLModel.name == model.name).\
-        group_by(DataFragment.label).all()
-    return [x[0] for x in res]
+    res = (session.query(DataFragment.label, func.count(DataFragment.id))
+           .select_from(MLModel)
+           .join(MLModel.fragments)
+           .filter(MLModel.name == model.name)
+           .group_by(DataFragment.label)
+           .all())
+    return dict(res)      # a list like [('approved', 3), ('rejected', 6)]
 
 
-@resource(collection_path="/", path="/{id}")
+@resource(collection_path="/",
+          path="/{id}", cors_origins=('*',), cors_max_age=3600)
 class MLModelResource(object):
+
     def __init__(self, request):
         self.request = request
+
+    def _model_url(self, ml):
+        return self.request.route_url(self.__class__.__name__.lower(),
+                                      id=ml.name)
+
+    def serialize_model(self, ml, sess):
+        res = {}
+        res['name'] = ml.name
+        res['labels'] = get_model_labels(ml, sess)
+        res['can_predict'] = ml.can_predict()
+        res['url'] = self._model_url(ml)
+        return res
 
     def collection_get(self):
         sess = self.request.dbsession
         res = []
         for ml in sess.query(MLModel):
-            d = {}
-            d['name'] = ml.name
-            d['labels'] = get_model_labels(ml, sess)
-            res.append(d)
+            res.append(self.serialize_model(ml, sess))
         return {'models': res}
 
     def collection_post(self):
@@ -42,9 +57,7 @@ class MLModelResource(object):
         sess = self.request.dbsession
         name = self.request.matchdict['id']
         model = sess.query(MLModel).filter(MLModel.name == name).one()
-        labels = get_model_labels(model, sess)
-        res = {'name': name, 'labels': labels}
-        return res
+        return self.serialize_model(model, sess)
 
     def put(self):
         sess = self.request.dbsession
@@ -69,7 +82,9 @@ class MLModelResource(object):
 
 prophet = Service(name="prophetservice",
                   description="Use the prediction service",
-                  path="/{name}/prophet")
+                  path="/{name}/prophet",
+                  cors_origins=('*',),
+                  cors_max_age=3600)
 
 
 @prophet.post()
@@ -82,6 +97,7 @@ def model_predict(request):
     if not model.can_predict():
         raise ValueError("Model is not able to predict")
     res = model.predict(text)
+
     return {'score': str(res[0, 0])}
 
 
