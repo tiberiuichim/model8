@@ -5,7 +5,7 @@ from .core import make_tokenizer, split_data, make_model
 from .utils import folder_lock
 from keras.models import load_model
 from nltk.tokenize.punkt import PunktSentenceTokenizer
-from repoze.lru import CacheMaker
+from repoze.lru import LRUCache
 from six.moves import cPickle
 from sqlalchemy import Column, Index, Integer, Text, String
 from sqlalchemy import ForeignKey, Boolean
@@ -22,7 +22,45 @@ import os.path
 import zope.sqlalchemy
 
 logger = logging.getLogger('model8')
-cache = CacheMaker(maxsize=10)
+
+
+class LRUCacheSetItem(LRUCache):
+    __setitem__ = LRUCache.put
+
+_lru_cache = LRUCacheSetItem(1000)
+
+
+class DontCache(Exception):
+    pass
+
+
+# lifted from kotti
+def cache(compute_key, container_factory):
+    marker = object()
+
+    def decorator(func):
+        def replacement(*args, **kwargs):
+            cache = container_factory()
+            if cache is None:
+                return func(*args, **kwargs)
+            try:
+                key = compute_key(*args, **kwargs)
+            except DontCache:
+                return func(*args, **kwargs)
+            key = u'{0}.{1}:{2}'.format(func.__module__, func.__name__, key)
+            cached_value = cache.get(key, marker)
+            if cached_value is marker:
+                cached_value = cache[key] = func(*args, **kwargs)
+            else:
+                pass
+            return cached_value
+        replacement.__doc__ = func.__doc__
+        return replacement
+    return decorator
+
+
+def lru_cache(compute_key):
+    return cache(compute_key, lambda: _lru_cache)
 
 
 # Recommended naming convention used by Alembic, as various different database
@@ -38,6 +76,10 @@ NAMING_CONVENTION = {
 
 metadata = MetaData(naming_convention=NAMING_CONVENTION)
 Base = declarative_base(metadata=metadata)
+
+
+def _model_key(model):
+    return model.name
 
 
 class MLModel(Base):
@@ -165,8 +207,7 @@ class MLModel(Base):
         tokens = self.tokenizer.texts_to_sequences([sentence])
         sequence = np.array(tokens)
         if len(sequence[0, ]) == 0:
-            logger.info("Cannot predict, no tokens recognized")
-            return {}
+            raise ValueError("Cannot predict, no tokens recognized")
         model = self.get_keras_model()
         res = model.predict_classes(sequence)
         labels = self.labels()
@@ -197,7 +238,7 @@ class MLModel(Base):
 
         return tokenizer
 
-    @cache.lrucache()
+    @lru_cache(_model_key)
     def get_keras_model(self):
         """ Returns the model object
         """

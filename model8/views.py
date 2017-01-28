@@ -100,8 +100,11 @@ def model_predict(request):
     text = request.json['text'].encode('utf-8')
     model = sess.query(MLModel).filter_by(name=name).one()
     if not model.can_predict():
-        raise ValueError("Model is not able to predict")
-    res = model.predict(text)
+        return {'error': "Model is not able to predict"}
+    try:
+        res = model.predict(text)
+    except ValueError as err:
+        return {'error': err.args[0]}
     return res
 
 
