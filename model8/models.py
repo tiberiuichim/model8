@@ -5,7 +5,7 @@ from .core import make_tokenizer, split_data, make_model
 from .utils import folder_lock
 from keras.models import load_model
 from nltk.tokenize.punkt import PunktSentenceTokenizer
-from repoze.lru import lru_cache
+from repoze.lru import CacheMaker
 from six.moves import cPickle
 from sqlalchemy import Column, Index, Integer, Text, String
 from sqlalchemy import ForeignKey, Boolean
@@ -15,13 +15,14 @@ from sqlalchemy.orm import configure_mappers
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.schema import MetaData
-import logging
 import json
+import logging
 import numpy as np
 import os.path
 import zope.sqlalchemy
 
 logger = logging.getLogger('model8')
+cache = CacheMaker(maxsize=10)
 
 
 # Recommended naming convention used by Alembic, as various different database
@@ -136,6 +137,13 @@ class MLModel(Base):
 
         return tokenizer, X_train, y_train, X_test, y_test, labels
 
+    def labels(self):
+        """ Returns a mapping label_index: label_title
+        """
+        with open(self._metadata_path, 'rb') as f:
+            meta = cPickle.load(f)
+        return meta['labels']
+
     # @lru_cache(2)
     def build(self):
         if self._is_locked():
@@ -152,6 +160,7 @@ class MLModel(Base):
     def predict(self, sentence):
         # because some sentences can contain words that don't exist in the
         # tokenizer, the model we split
+        # Note: Assumes one sentence only
         sentence = sentence.decode('utf-8')     # ???
         tokens = self.tokenizer.texts_to_sequences([sentence])
         sequence = np.array(tokens)
@@ -159,9 +168,10 @@ class MLModel(Base):
             logger.info("Cannot predict, no tokens recognized")
             return {}
         model = self.get_keras_model()
-        res = model.predict(sequence)
-        print('prediction result', res)
-        return res
+        res = model.predict_classes(sequence)
+        labels = self.labels()
+        labels = {v: k for k, v in labels.items()}  # invertify dict
+        return labels[res[0, 0]]
 
     def statistics(self):
         sp = self._stats_path
@@ -187,13 +197,14 @@ class MLModel(Base):
 
         return tokenizer
 
-    @lru_cache(10)
+    @cache.lrucache()
     def get_keras_model(self):
         """ Returns the model object
         """
         mp = self._model_path
         if self._is_locked() or (not os.path.exists(mp)):
             raise ValueError
+        print("=" * 20, 'loading model')
         return load_model(mp)
 
     @property

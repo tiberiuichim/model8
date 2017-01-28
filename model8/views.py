@@ -102,8 +102,7 @@ def model_predict(request):
     if not model.can_predict():
         raise ValueError("Model is not able to predict")
     res = model.predict(text)
-
-    return {'score': str(res[0, 0])}
+    return res
 
 
 @prophet.get()
