@@ -152,13 +152,16 @@ class MLModel(Base):
     def predict(self, sentence):
         # because some sentences can contain words that don't exist in the
         # tokenizer, the model we split
+        sentence = sentence.decode('utf-8')     # ???
         tokens = self.tokenizer.texts_to_sequences([sentence])
         sequence = np.array(tokens)
         if len(sequence[0, ]) == 0:
             logger.info("Cannot predict, no tokens recognized")
             return {}
         model = self.get_keras_model()
-        return model.predict(sequence)
+        res = model.predict(sequence)
+        print('prediction result', res)
+        return res
 
     def statistics(self):
         sp = self._stats_path
@@ -179,7 +182,7 @@ class MLModel(Base):
         if self._is_locked() or (not os.path.exists(tp)):
             raise ValueError
 
-        with open(tp) as f:
+        with open(tp, 'rb') as f:
             tokenizer = cPickle.load(f)
 
         return tokenizer

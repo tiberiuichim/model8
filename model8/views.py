@@ -51,7 +51,7 @@ class MLModelResource(object):
         data = self.request.json_body
         model = MLModel(name=data['name'])
         self.request.dbsession.add(model)
-        return {'name': model.name, 'labels': []}
+        return self.collection_get()
 
     def get(self):
         sess = self.request.dbsession
@@ -60,6 +60,8 @@ class MLModelResource(object):
         return self.serialize_model(model, sess)
 
     def put(self):
+        """ Add new data to the model. Expects :text and :label
+        """
         sess = self.request.dbsession
         name = self.request.matchdict['id']
         model = sess.query(MLModel).filter(MLModel.name == name).one()
@@ -68,7 +70,7 @@ class MLModelResource(object):
         label = data['label']
         frag = DataFragment(text=text, label=label)
         model.fragments.append(frag)
-        return self.get()
+        return self.collection_get()
 
     def post(self):
         """ Compile the tokenizer, fit the model
@@ -76,8 +78,11 @@ class MLModelResource(object):
         sess = self.request.dbsession
         name = self.request.matchdict['id']
         model = sess.query(MLModel).filter_by(name=name).one()
-        model.build()
-        return {'acknowledge': True}
+        try:
+            model.build()
+            return {'acknowledge': True}
+        except ValueError as e:
+            return {'error': e.args[0]}
 
 
 prophet = Service(name="prophetservice",
