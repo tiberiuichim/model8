@@ -110,7 +110,18 @@ def model_predict(request):
 
 @prophet.get()
 def get_status(request):
-    return {}
+    sess = request.dbsession
+    name = request.matchdict['name']
+    model = sess.query(MLModel).filter_by(name=name).one()
+    km = model.get_keras_model()
+    summary = km.summary()
+    return {
+        'can_predict': model.can_predict,
+        'labels': get_model_labels(model, sess),
+        'words': 1000,
+        'sentences': 1000,
+        'top_10_words': [],
+    }
 
 
 # tokenizerservice = Service(name="tokenizerservice",
